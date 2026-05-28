@@ -1,3 +1,5 @@
+export const BACKEND_URL = 'https://pulseboard-server-px1z.onrender.com';
+
 export const POLL_INTERVAL = 25000;
 
 export const RETRY_ATTEMPTS = 2;

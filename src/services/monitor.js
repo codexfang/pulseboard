@@ -1,4 +1,4 @@
-import { SERVICES, RETRY_ATTEMPTS, RETRY_DELAY, MAX_HISTORY_PER_SERVICE, POLL_INTERVAL } from '../utils/constants';
+import { SERVICES, RETRY_ATTEMPTS, RETRY_DELAY, MAX_HISTORY_PER_SERVICE, POLL_INTERVAL, BACKEND_URL } from '../utils/constants';
 import { saveRecord, getHistory, pruneHistory } from '../storage/db';
 
 export class MonitorEngine {
@@ -10,6 +10,7 @@ export class MonitorEngine {
     this.timer = null;
     this.running = false;
     this.errorCounts = new Map();
+    this.backendAvailable = false;
   }
 
   subscribe(listener) {
@@ -118,6 +119,37 @@ export class MonitorEngine {
     this.notify();
   }
 
+  async fetchFromBackend() {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(`${BACKEND_URL}/api/status`, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!res.ok) return null;
+
+      const data = await res.json();
+      this.backendAvailable = true;
+
+      const now = Date.now();
+      for (const svc of data.services) {
+        const h = (svc.history || []).map((r) => ({
+          ...r,
+          serviceId: svc.id,
+        }));
+        this.history.set(svc.id, h);
+        if (svc.last) {
+          this.results.set(svc.id, svc.last);
+        }
+      }
+
+      return data;
+    } catch {
+      this.backendAvailable = false;
+      return null;
+    }
+  }
+
   async loadHistoryFromStorage() {
     const promises = this.services.map(async (svc) => {
       const records = await getHistory(svc.id, MAX_HISTORY_PER_SERVICE);
@@ -127,20 +159,29 @@ export class MonitorEngine {
       }
     });
     await Promise.allSettled(promises);
-    this.notify();
   }
 
   start() {
     if (this.running) return;
     this.running = true;
 
-    this.loadHistoryFromStorage().then(() => {
-      this.pollAll();
-    });
+    this.fetchFromBackend().then((backendData) => {
+      if (backendData) {
+        this.notify();
 
-    this.timer = setInterval(() => {
-      this.pollAll();
-    }, POLL_INTERVAL);
+        this.timer = setInterval(() => {
+          this.fetchFromBackend().then(() => this.notify());
+        }, POLL_INTERVAL);
+      } else {
+        this.loadHistoryFromStorage().then(() => {
+          this.pollAll();
+        });
+
+        this.timer = setInterval(() => {
+          this.pollAll();
+        }, POLL_INTERVAL);
+      }
+    });
   }
 
   stop() {
