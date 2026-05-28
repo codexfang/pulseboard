@@ -12,15 +12,28 @@ import { STATUS_FILTERS } from '../utils/constants';
 import { exportDashboardData } from '../utils/export';
 
 export default function Dashboard() {
-  const { services, incidentMode, lastPollTime, refresh } = useMonitor();
+  const { services, incidentMode, refresh } = useMonitor();
   const [filterStatus, setFilterStatus] = useState(STATUS_FILTERS.ALL);
   const [selectedService, setSelectedService] = useState(null);
   const [showCharts, setShowCharts] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const filteredServices = useMemo(() => {
-    if (filterStatus === STATUS_FILTERS.ALL) return services;
-    return services.filter((s) => s.status === filterStatus);
-  }, [services, filterStatus]);
+    let result = services;
+    if (filterStatus !== STATUS_FILTERS.ALL) {
+      result = result.filter((s) => s.status === filterStatus);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.description.toLowerCase().includes(q) ||
+          s.category.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [services, filterStatus, searchQuery]);
 
   const selectedData = useMemo(() => {
     if (!selectedService) return null;
@@ -31,22 +44,16 @@ export default function Dashboard() {
     exportDashboardData(services, new Map(services.map((s) => [s.id, s.history || []])));
   }, [services]);
 
-  const serviceCounts = useMemo(() => ({
-    healthy: services.filter((s) => s.status === 'healthy').length,
-    degraded: services.filter((s) => s.status === 'degraded').length,
-    failing: services.filter((s) => s.status === 'failing').length,
-  }), [services]);
-
   return (
     <div className="min-h-screen bg-surface-950">
       <Header
         incidentMode={incidentMode}
-        lastPollTime={lastPollTime}
         filterStatus={filterStatus}
         onFilterChange={setFilterStatus}
         onExport={handleExport}
         onRefresh={refresh}
-        serviceCounts={serviceCounts}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -75,12 +82,19 @@ export default function Dashboard() {
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-surface-100">Monitored Services</h2>
-              <button
-                onClick={() => setShowCharts(!showCharts)}
-                className="btn-ghost text-xs"
-              >
-                {showCharts ? 'Hide Charts' : 'Show Charts'}
-              </button>
+              <div className="flex items-center gap-3">
+                {searchQuery && (
+                  <span className="text-xs text-surface-500">
+                    {filteredServices.length} of {services.length} services
+                  </span>
+                )}
+                <button
+                  onClick={() => setShowCharts(!showCharts)}
+                  className="btn-ghost text-xs"
+                >
+                  {showCharts ? 'Hide Charts' : 'Show Charts'}
+                </button>
+              </div>
             </div>
             <ServiceGrid
               services={filteredServices}

@@ -5,7 +5,6 @@ import { computeHealthScore, computeErrorRate, computeUptime, categorizeService,
 export function useMonitor() {
   const [services, setServices] = useState([]);
   const [incidentMode, setIncidentMode] = useState(false);
-  const [lastPollTime, setLastPollTime] = useState(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -38,7 +37,6 @@ export function useMonitor() {
 
       setServices(enriched);
       setIncidentMode(monitorEngine.getIncidentStatus());
-      setLastPollTime(Date.now());
     });
 
     return () => {
@@ -52,5 +50,5 @@ export function useMonitor() {
     monitorEngine.pollAll();
   }, []);
 
-  return { services, incidentMode, lastPollTime, refresh };
+  return { services, incidentMode, refresh };
 }
