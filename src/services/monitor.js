@@ -166,8 +166,8 @@ export class MonitorEngine {
       totalRequests += history.length;
       totalFailures += history.filter((r) => !r.success).length;
     }
-    if (totalRequests === 0) return false;
-    return totalFailures / totalRequests > 0.2;
+    if (totalRequests < 30) return false;
+    return totalFailures / totalRequests > 0.4;
   }
 }
 
